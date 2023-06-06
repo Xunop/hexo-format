@@ -19,7 +19,7 @@ FILE=""
 
 
 function handle_error {
-  echo -e "\033[31mError:\033[0m" "$1" >&2
+  echo -e "\033[31mError:\033[0m" "$1" at $2 >&2
   exit 1
 }
 
@@ -55,7 +55,7 @@ function parse_args {
         ;;
       -a|--all)
         ALL="$2"
-        shift 2
+        shift
         ;;
       -f|--file)
         FILE="$2"
@@ -75,10 +75,23 @@ function parse_args {
 
 # get description
 function get_desc {
-    # get article desc
-    # desc is not '#' $ '`' for the first two lines of the article
-    DESC=$(sed -n "${yhln},26{/^[^#\`]/p}" "$1" | sed -n '1,2p')
-    echo "desc: $DESC"
+    # if there is not a head info
+    if [ $yhln == 1 ]; then
+        # del lines start with '```' and end with '```'
+        DESC=$(sed -e '1,40{/```/,/```/{//!d;}}' "$1" \
+            | sed '/\[\|\!\[/d' \
+            | sed -n '1,20{/^[^#\`]/p}' \
+            | sed -n '1,2p')
+    else
+        # get article desc
+        # desc is not '#' $ '`' for the first two lines of the article
+        DESC=$(sed -e '1,40{/```/,/```/{//!d;}}' "$1" \
+            | sed '/\[\|\!\[/d' \
+            | sed -n "$((yhln+1)),20{/^[^#\`]/p}" \
+            | sed -n '1,2p')
+    fi
+    # replace '\' and '"' and '*' and '~' and '>'
+    DESC=$(echo $DESC | sed 's/\\/\\\\/g; s/\"/\\\"/g; s/\*//g; s/\~//g; s/>//g; s/:/\":\"/g')
 }
 
 # determine if a description is required
@@ -96,9 +109,10 @@ function is_desc {
 function gen_head_info {
     # get article title
     TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1" | awk '{print $2}')
-
     # generate head info
     head_info="---\ndate: ${DATE}\ntitle: ${TITLE}\ndescription: ${DESC}\n---"
+    # replace '\' and '"'
+    head_info=$(echo $head_info | sed 's/\\/\\\\/g' | sed 's/\"/\\\"/g')
 }
 
 # 1. check if the file exists
@@ -108,10 +122,8 @@ function gen_head_info {
 function peocess_file {
     # check if file exists
     if [ ! -f "$1" ]; then
-        handle_error "File $1 does not exist"
+        handle_error "File $1 does not exist" $LINENO
     fi
-
-    echo "debug---1"
     
     # insert '<!-- more -->' before line 6
     ln=6
@@ -120,11 +132,9 @@ function peocess_file {
     TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1" | awk '{print $2}')
     if [ ! -d $SOURCE_DIR/$dir ]; then
         echo "--> create folder $SOURCE_DIR/$dir"
-        mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir"
+        mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir" $LINENO
     fi
 
-    echo "debug---2"
-    
     # first line is '---'
     if head -n 1 "$1" | grep -q "^---$"; then
         # get line number of second '---'
@@ -132,26 +142,24 @@ function peocess_file {
         ln=$((yhln+6))
     fi
     
-    echo "debug---3"
-    
     # determine if there is need a description
     if is_desc "$1"; then
         get_desc "$1"
-        echo "debug---4"
-        # have head info
-        if [ $yhln != 1 ]; then
-            sed -n "1,${yhln}p" "$1" | sed "1a description: "$DESC"" > $SOURCE_DIR/$dir/$filename \
-                || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
-        else
-            gen_head_info "$1"
-            # TODO
-            sed '1i ---\ndate: ${DATE}\ntitle: ${TITLE}\ndescription: ${DESC}\n---' "$1" \
-            #sed "1i ${head_info}" "$1" \
-                > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
-            echo "debug---5"
+        if [ -n "$DESC" ]; then
+            # have head info
+            if [ $yhln != 1 ]; then
+                sed "1a description: $DESC" "$1" > $SOURCE_DIR/$dir/$filename \
+                    || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+            else
+                gen_head_info "$1"
+                sed "1i $(echo -e $head_info)" "$1" \
+                    > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+            fi
+            return
         fi
-        return
     fi
+
+    echo "oh! $SOURCE_DIR/$dir/$filename is need a <!-- more -->"
 
     # check if the line is a block
     hline=$(sed -n '1,20{/^```/{=;q}}' $1)
@@ -167,17 +175,6 @@ function peocess_file {
             fi
         fi
     fi
-
-    # determine if there is need a description
-#    if is_desc "$1"; then
-#        get_desc "$1"
-#        TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1" | awk '{print $2}')
-#        # remove '<!--more-->' & remove titles that start with '#' but not '##...'
-#        sed '1,20{/<!-- more -->/d}' "$1" | sed '1,20{/^[#][^#]/d}' "$1" \
-#        sed "1i ---\ndate: ${date}\ntitle: ${TITLE}\ndescription: ${DESC}---" "$1" \
-#        > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
-#        return
-#    fi
      
     # determine if the string "<!-- more -->" exists in the first 20 lines
     # generally do not exist
@@ -186,13 +183,15 @@ function peocess_file {
         # insert '<!-- more -->'
         # remove titles that start with '#' but not '##...'
         # write to file
-        sed '1,20{/<!-- more -->/d}' "$1" | sed "${ln}i <!-- more -->" "$1" | sed '1,20{/^[#][^#]/d}' "$1" > $SOURCE_DIR/$dir/$filename \
-            || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
+        sed '1,20{/<!-- more -->/d}' "$1" | sed "${ln}i \\\n<!-- more -->" | sed '1,20{/^[#][^#]/d}' > $SOURCE_DIR/$dir/$filename \
+            || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
         echo "--> saved $SOURCE_DIR/$dir/$filename"
     else
+        echo "--> insert <!-- more --> to $SOURCE_DIR/$dir/$filename"
+        
         # insert '<!-- more -->'
-        sed "${ln}i <!-- more -->" "$1" | sed '1,20{/^[#][^#]/d}' "$1" > $SOURCE_DIR/$dir/$filename \
-            || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
+        sed "${ln}i \\\n<!-- more -->" "$1" | sed '1,20{/^[#][^#]/d}' > $SOURCE_DIR/$dir/$filename \
+            || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
     fi
 }
 
@@ -214,7 +213,7 @@ function traverse_folder {
 # specify a file
 function specify_file {
     if [ ! -f "$1" ]; then
-        handle_error "File $1 does not exist"
+        handle_error "File $1 does not exist" $LINENO
     fi
     peocess_file "$1"
 }
@@ -222,6 +221,7 @@ function specify_file {
 # main
 parse_args "$@"
 
+echo "NOTE_DIR: $NOTE_DIR; SOURCE_DIR: $SOURCE_DIR"
 if [ -n "$FILE" ]; then
     specify_file "$FILE"
 else
