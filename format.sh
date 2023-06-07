@@ -41,7 +41,7 @@ print_warning () {
 }
 
 function handle_error {
-  print_error "$1" at $2 >&2
+  echo "$1" at $2 >&2
   exit 1
 }
 
