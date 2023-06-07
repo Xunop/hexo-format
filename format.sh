@@ -26,15 +26,18 @@ NC='\033[0m'
 
 # Define functions for printing colored output
 print_error () {
-  printf "${RED}[ERROR] ${1}${NC}\n"
+  #printf "${RED}[ERROR] ${1}${NC}\n"
+  echo -e "${RED}[ERROR] ${1}${NC}\n"
 }
 
 print_info () {
-  printf "${GREEN}[INFO] ${1}${NC}\n"
+  #printf "${GREEN}[INFO] ${1}${NC}\n"
+  echo -e "${GREEN}[INFO] ${1}${NC}\n"
 }
 
 print_warning () {
-  printf "${YELLOW}[WARNING] ${1}${NC}\n"
+  #printf "${YELLOW}[WARNING] ${1}${NC}\n"
+  echo -e "${YELLOW}[WARNING] ${1}${NC}\n"
 }
 
 function handle_error {
