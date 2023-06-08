@@ -40,12 +40,12 @@ print_warning () {
   echo -e "${YELLOW}[WARNING] ${1}${NC}\n"
 }
 
-function handle_error {
-  echo "$1" at $2 >&2
+handle_error () {
+  print_error "$1" at $2 >&2
   exit 1
 }
 
-function help {
+help () {
   echo "Usage: $(basename "$0") [OPTIONS]"
   echo "  OPTIONS:"
   echo "    -s, --source-dir DIR   Specify the source directory (default: '../source/_posts')"
@@ -62,7 +62,7 @@ function help {
   echo "  $(basename "$0") --source-dir '../myblog/_posts' --note-dir '../myblog/notes'"
 }
 
-function parse_args {
+parse_args () {
   while [[ $# -gt 0 ]]; do
     key="$1"
 
@@ -96,7 +96,7 @@ function parse_args {
 }
 
 # get description
-function get_desc {
+get_desc () {
     # if there is not a head info
     if [ $yhln == 1 ]; then
         # del lines start with '```' and end with '```'
@@ -117,7 +117,7 @@ function get_desc {
 }
 
 # determine if a description is required
-function is_desc {
+is_desc () {
     lcount=$(sed -n '1,20{/^#/p}' $1 | wc -l)
     # if the number of lines starting with '#' is greater than 2, it is considered that there is a description
     if [ $lcount -ge 2 ]; then
@@ -128,7 +128,7 @@ function is_desc {
 }
 
 # generate head info
-function gen_head_info {
+gen_head_info () {
     # get article title
     TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1" | awk '{print $2}')
     # DESC is not empty
@@ -146,11 +146,10 @@ function gen_head_info {
 # 2. determine if there is need a description
 # 3. or insert '<!-- more -->' before line 6
 # 4. write to file
-function peocess_file {
+peocess_file () {
     # check if file exists
     if [ ! -f "$1" ]; then
-        echo "File $1 does not exist" >&2
-        echo "File $1 does not exist" $LINENO
+        handle_error "File $1 does not exist" $LINENO
     fi
     
     # insert '<!-- more -->' before line 6
@@ -160,7 +159,7 @@ function peocess_file {
     TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1" | awk '{print $2}')
     if [ ! -d $SOURCE_DIR/$dir ]; then
         print_info "--> create folder $SOURCE_DIR/$dir"
-        mkdir -p $SOURCE_DIR/$dir || echo "Could not create folder $SOURCE_DIR/$dir" $LINENO
+        mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir" $LINENO
     fi
 
     # first line is '---'
@@ -186,12 +185,12 @@ function peocess_file {
             # DESC is not empty
             if [ -n "$DESC" ]; then
                 sed "1a description: $DESC" "$1" > $SOURCE_DIR/$dir/$filename \
-                    || echo "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+                    || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
                                     return
             fi
         else
             sed "1i $(echo -e $head_info)" "$1" \
-                > $SOURCE_DIR/$dir/$filename || echo "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+                > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
             head_info=""
             # DESC is not empty then return
             if [ -n "$DESC" ]; then return; fi
@@ -201,7 +200,7 @@ function peocess_file {
     echo -e "$head_info"
     # insert head info
     if [ -n "$head_info" ]; then
-        sed "1i $(echo -e $head_info)" "$1" > "temp" || echo "Error $SOURCE_DIR/$dir/$filename" $LINENO
+        sed "1i $(echo -e $head_info)" "$1" > "temp" || handle_error "Error $SOURCE_DIR/$dir/$filename" $LINENO
     fi
     
     print_info "oh! $SOURCE_DIR/$dir/$filename is need a <!-- more -->"
@@ -231,10 +230,10 @@ function peocess_file {
         
         if [ -n "$head_info" ]; then
             sed '1,20{/<!-- more -->/d}' "$1" | sed "${ln}i \\\n<!-- more -->" | sed '1,20{/^[#][^#]/d}' | sed "1i $(echo -e $head_info)" > $SOURCE_DIR/$dir/$filename \
-                || echo "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+                || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
         else
             sed '1,20{/<!-- more -->/d}' "$1" | sed "${ln}i \\\n<!-- more -->" | sed '1,20{/^[#][^#]/d}' > $SOURCE_DIR/$dir/$filename \
-                || echo "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+                || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
         fi
         print_info "--> saved $SOURCE_DIR/$dir/$filename"
     else
@@ -243,15 +242,15 @@ function peocess_file {
         if [ -n "$head_info" ]; then
             # insert '<!-- more -->'
             sed "${ln}i \\\n<!-- more -->" "$1" | sed '1,20{/^[#][^#]/d}' | sed "1i $(echo -e $head_info)" > $SOURCE_DIR/$dir/$filename \
-                || echo "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+                || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
         else
             sed "${ln}i \\\n<!-- more -->" "$1" | sed '1,20{/^[#][^#]/d}' | > $SOURCE_DIR/$dir/$filename \
-                || echo "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+                || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
         fi
     fi
 }
 
-function traverse_folder {
+traverse_folder () {
     for file in "$1"/*; do
         if [ -d "$file" ]; then
             print_info "traversing folder $file"
@@ -267,9 +266,9 @@ function traverse_folder {
 }
 
 # specify a file
-function specify_file {
+specify_file (){
     if [ ! -f "$1" ]; then
-        echo "File $1 does not exist" $LINENO
+        handle_error "File $1 does not exist" $LINENO
     fi
     peocess_file "$1"
 }
