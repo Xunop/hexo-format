@@ -200,8 +200,10 @@ peocess_file () {
     echo -e "$head_info"
     # insert head info
     if [ -n "$head_info" ]; then
-        sed "1i $(echo -e $head_info)" "$1" > "temp" || handle_error "Error $SOURCE_DIR/$dir/$filename" $LINENO
+        sed "1i $(echo $head_info)" "$1" > $SOURCE_DIR/$dir/$filename || handle_error "Error $SOURCE_DIR/$dir/$filename" $LINENO
     fi
+    echo "here is article:"
+    sed "1i $(echo -e $head_info)" "$1" 
     
     print_info "oh! $SOURCE_DIR/$dir/$filename is need a <!-- more -->"
 
