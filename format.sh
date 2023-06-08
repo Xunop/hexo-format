@@ -63,7 +63,7 @@ help () {
 }
 
 parse_args () {
-  while [[ $# -gt 0 ]]; do
+  while [ $# -gt 0 ]; do
     key="$1"
 
     case $key in
@@ -98,7 +98,7 @@ parse_args () {
 # get description
 get_desc () {
     # if there is not a head info
-    if [ $yhln == 1 ]; then
+    if [ $yhln -eq 1 ]; then
         # del lines start with '```' and end with '```'
         DESC=$(sed -e '1,40{/```/,/```/{//!d;}}' "$1" \
             | sed '/\[\|\!\[/d' \
@@ -171,7 +171,7 @@ peocess_file () {
     fi
     
     # no head info
-    if [ $yhln == 1 ]; then
+    if [ "$yhln" -eq 1 ]; then
         print_info "this article has no head info, generate head info"
         gen_head_info "$1"
     fi
@@ -256,7 +256,7 @@ traverse_folder () {
             print_info "traversing folder $file"
             traverse_folder "$file"
         elif [ "${file##*.}" = "md" ]; then
-            if [ "$(basename "$file")" == "README.md" ]; then
+            if [ "$(basename "$file")" = "README.md" ]; then
                 continue
             fi
             print_info "processing file $file"
