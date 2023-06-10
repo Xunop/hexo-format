@@ -153,10 +153,12 @@ peocess_file () {
     fi
     
     if [ ! "${file##*.}" = "md" ]; then
+        echo 'not md'
         return
     fi
     
     if [ "$(basename "$file")" = "README.md" ]; then
+        echo 'is README.md'
         return
     fi
     
