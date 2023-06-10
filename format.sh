@@ -152,7 +152,7 @@ peocess_file () {
         handle_error "File $1 does not exist" $LINENO
     fi
     
-    if [ "${file##*.}" != "md" ]; then
+    if [ "${1##*.}" != "md" ]; then
         return
     fi
     
