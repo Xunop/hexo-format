@@ -152,13 +152,11 @@ peocess_file () {
         handle_error "File $1 does not exist" $LINENO
     fi
     
-    if [ ! "${file##*.}" = "md" ]; then
-        echo 'not md'
+    if [ "${file##*.}" != "md" ]; then
         return
     fi
     
     if [ "$(basename "$file")" = "README.md" ]; then
-        echo 'is README.md'
         return
     fi
     
