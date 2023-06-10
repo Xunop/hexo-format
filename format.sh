@@ -152,6 +152,14 @@ peocess_file () {
         handle_error "File $1 does not exist" $LINENO
     fi
     
+    if [ ! "${file##*.}" = "md" ]; then
+        return
+    fi
+    
+    if [ "$(basename "$file")" = "README.md" ]; then
+        return
+    fi
+    
     # insert '<!-- more -->' before line 6
     ln=6
     dir=$(dirname "$1" | xargs basename)
