@@ -178,6 +178,8 @@ peocess_file () {
         ln=$((yhln+6))
     fi
     
+    get_desc "$1"
+    
     # no head info
     if [ "$yhln" -eq 1 ]; then
         print_info "this article has no head info, generate head info"
@@ -186,7 +188,6 @@ peocess_file () {
     # determine if there is need a description
     if is_desc "$1"; then
         print_info "this article need a description"
-        get_desc "$1"
         # head_info is empty
         # this article has head info
         if [ -z "$head_info" ]; then
