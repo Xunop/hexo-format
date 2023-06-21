@@ -95,31 +95,30 @@ parse_args () {
   done
 }
 
+# replace '\' and '"' and '*' and '~' and '>'
+replace() {
+    $1=$(sed 's/\\/\\\\/g; s/\"/\\\"/g; s/\*//g; s/\~//g; s/>//g; s/:/\":\"/g' "$1")
+}
+
 # get description
 get_desc () {
-    # if there is not a head info
-    if [ $yhln -eq 1 ]; then
-        # del lines start with '```' and end with '```'
-        DESC=$(sed -e '1,40{/```/,/```/{//!d;}}' "$1" \
-            | sed '/\[\|\!\[/d' \
-            | sed -n '1,20{/^[^#\`]/p}' \
-            | sed -n '1,2p')
-    else
-        # get article desc
-        # desc is not '#' $ '`' for the first two lines of the article
-        DESC=$(sed -e '1,40{/```/,/```/{//!d;}}' "$1" \
-            | sed '/\[\|\!\[/d' \
-            | sed -n "$((yhln+1)),20{/^[^#\`]/p}" \
-            | sed -n '1,2p')
+    # del lines start with '```' and end with '```'
+    # del lines container '[' or '![', because it is a picture or a link
+    tmp=$(sed -e '/```/,/```/d' -e 's/`//g' -e '/\[\|\!\[/d' "$1")
+    DESC=$(echo "$tmp" | sed -n '/^#/,/^##/p;/^##/q' | sed '/#/d' | sed '/^$/d');
+    if [ -z "$DESC" ]; then
+        # get the first 15 lines not starting with '#' or '`'
+        DESC=$(echo "$tmp" | sed -n '1,15{/^[^#\`]/p}' | sed -n '1,2p')
     fi
     # replace '\' and '"' and '*' and '~' and '>'
-    DESC=$(echo $DESC | sed 's/\\/\\\\/g; s/\"/\\\"/g; s/\*//g; s/\~//g; s/>//g; s/:/\":\"/g')
+    DESC=$(echo "$DESC" | sed 's/\\/\\\\/g; s/\"/\\\"/g; s/\*//g; s/\~//g; s/>//g; s/:/\":\"/g')
+    #replace "$DESC"
 }
 
 # determine if a description is required
 is_desc () {
-    lcount=$(sed -n '1,20{/^#/p}' $1 | wc -l)
-    # if the number of lines starting with '#' is greater than 2, it is considered that there is a description
+    lcount=$(sed -n '1,15{/^#/p}' $1 | wc -l)
+    # if the number of lines starting with '#' is greater than 2 in 1-10, it is considered that there is a description
     if [ $lcount -ge 2 ]; then
         return 0
     else
@@ -127,10 +126,16 @@ is_desc () {
     fi
 }
 
+# get title
+get_title () {
+    TITLE=$(sed -n '1,10{/^[#][^#]/p}' "$1")
+    TITLE=${TITLE: 2}
+}
+
 # generate head info
 gen_head_info () {
     # get article title
-    TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1")
+    get_title "$1"
     # DESC is not empty
     if [ -n "$DESC" ]; then
         # generate head info
@@ -139,7 +144,7 @@ gen_head_info () {
         head_info="---\ndate: ${DATE}\ntitle: ${TITLE}\n---"
     fi
     # replace '\' and '"'
-    head_info=$(echo $head_info | sed 's/\\/\\\\/g' | sed 's/\"/\\\"/g')
+    head_info=$(echo "$head_info" | sed 's/\\/\\\\/g' | sed 's/\"/\\\"/g')
 }
 
 # 1. check if the file exists
@@ -164,62 +169,45 @@ peocess_file () {
     ln=6
     dir=$(dirname "$1" | xargs basename)
     filename=$(basename "$1")
-    TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1")
-    
-    echo "---"
-    echo "TITLE: $TITLE"
-    echo "---"
-
     if [ ! -d $SOURCE_DIR/$dir ]; then
         print_info "--> create folder $SOURCE_DIR/$dir"
         mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir" $LINENO
     fi
-
-    # first line is '---'
-    if head -n 1 "$1" | grep -q "^---$"; then
-        # get line number of second '---'
-        # if there is not a '---', yhln=1
-        yhln=$(sed -n '2,20{/^---/{=;q}}' "$1")
-        ln=$((yhln+6))
-    fi
-    
     get_desc "$1"
     
-    # no head info
-    if [ "$yhln" -eq 1 ]; then
-        print_info "this article has no head info, generate head info"
+    # DESC is not empty
+    if [ -n "$DESC" ]; then
         gen_head_info "$1"
+        # insert head info & write to file
+        echo -e "$head_info"
+        sed "1i $(echo -e "$head_info")" "$1" \
+            > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+        return
     fi
+    
     # determine if there is need a description
-    if is_desc "$1"; then
-        print_info "this article need a description"
-        # head_info is empty
-        # this article has head info
-        if [ -z "$head_info" ]; then
-            # DESC is not empty
-            if [ -n "$DESC" ]; then
-                sed "1a description: $DESC" "$1" > $SOURCE_DIR/$dir/$filename \
-                    || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
-                                    return
-            fi
-        else
-            sed "1i $(echo -e $head_info)" "$1" \
-                > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
-            head_info=""
-            # DESC is not empty then return
-            if [ -n "$DESC" ]; then return; fi
-        fi
-    fi
+   # if is_desc "$1"; then
+   #     print_info "this article need a description"
+   #     # head_info is empty
+   #     # this article has head info
+   #     if [ -z "$head_info" ]; then
+   #         # DESC is not empty
+   #         if [ -n "$DESC" ]; then
+   #             sed "1a description: $DESC" "$1" > $SOURCE_DIR/$dir/$filename \
+   #                 || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+   #             return
+   #         fi
+   #     else
+   #         sed "1i $(echo -e $head_info)" "$1" \
+   #             > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+   #         head_info=""
+   #         # DESC is not empty then return
+   #         if [ -n "$DESC" ]; then return; fi
+   #     fi
+   # fi
     
-    echo -e "$head_info"
-    # insert head info
-    if [ -n "$head_info" ]; then
-        sed "1i $(echo $head_info)" "$1" > $SOURCE_DIR/$dir/$filename || handle_error "Error $SOURCE_DIR/$dir/$filename" $LINENO
-    fi
-    #echo "here is article:"
-    #sed "1i $(echo -e $head_info)" "$1" 
-    
-    print_info "oh! $SOURCE_DIR/$dir/$filename is need a <!-- more -->"
+    gen_head_info "$1"
+    print_info "oh! "$1" is need a <!-- more -->"
 
     # check if the line is a block
     hline=$(sed -n '1,20{/^```/{=;q}}' $1)
@@ -243,7 +231,6 @@ peocess_file () {
         # insert '<!-- more -->'
         # remove titles that start with '#' but not '##...'
         # write to file
-        
         if [ -n "$head_info" ]; then
             sed '1,20{/<!-- more -->/d}' "$1" | sed "${ln}i \\\n<!-- more -->" | sed '1,20{/^[#][^#]/d}' | sed "1i $(echo -e $head_info)" > $SOURCE_DIR/$dir/$filename \
                 || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
