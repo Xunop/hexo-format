@@ -130,7 +130,7 @@ is_desc () {
 # generate head info
 gen_head_info () {
     # get article title
-    TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1" | awk '{print $2}')
+    TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1")
     # DESC is not empty
     if [ -n "$DESC" ]; then
         # generate head info
@@ -144,7 +144,7 @@ gen_head_info () {
 
 # 1. check if the file exists
 # 2. determine if there is need a description
-# 3. or insert '<!-- more -->' before line 6
+# 3. or insert '<!-- more -->' before line 7
 # 4. write to file
 peocess_file () {
     # check if file exists
@@ -164,7 +164,12 @@ peocess_file () {
     ln=6
     dir=$(dirname "$1" | xargs basename)
     filename=$(basename "$1")
-    TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1" | awk '{print $2}')
+    TITLE=$(sed -n '1,20{/^[#][^#]/p}' "$1")
+    
+    echo "---"
+    echo "TITLE: $TITLE"
+    echo "---"
+
     if [ ! -d $SOURCE_DIR/$dir ]; then
         print_info "--> create folder $SOURCE_DIR/$dir"
         mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir" $LINENO
