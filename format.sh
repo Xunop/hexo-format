@@ -104,12 +104,13 @@ replace() {
 get_desc () {
     # del lines start with '```' and end with '```'
     # del lines container '[' or '![', because it is a picture or a link
-    tmp=$(sed -e '/```/,/```/d' -e 's/`//g' -e '/\[\|\!\[/d' "$1")
+    tmp=$(sed -n '1,20 { /```/,/```/d; s/`//g; /\[\|\!\[/d; p; }' "$1")
     DESC=$(echo "$tmp" | sed -n '/^#/,/^##/p;/^##/q' | sed '/#/d' | sed '/^$/d');
     if [ -z "$DESC" ]; then
         # get the first 15 lines not starting with '#' or '`'
         DESC=$(echo "$tmp" | sed -n '1,15{/^[^#\`]/p}' | sed -n '1,2p')
     fi
+    DESC=$(echo "$DESC" | tr -d '\n')
     # replace '\' and '"' and '*' and '~' and '>'
     DESC=$(echo "$DESC" | sed 's/\\/\\\\/g; s/\"/\\\"/g; s/\*//g; s/\~//g; s/>//g; s/:/\":\"/g')
     #replace "$DESC"
@@ -180,7 +181,7 @@ peocess_file () {
         gen_head_info "$1"
         # insert head info & write to file & del the line start with '#'
         sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
-            > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+            > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
         return
     fi
     
