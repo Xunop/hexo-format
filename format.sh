@@ -178,9 +178,8 @@ peocess_file () {
     # DESC is not empty
     if [ -n "$DESC" ]; then
         gen_head_info "$1"
-        # insert head info & write to file
-        echo -e "$head_info"
-        sed "1i $(echo -e "$head_info")" "$1" \
+        # insert head info & write to file & del the line start with '#'
+        sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
             > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
         return
     fi
