@@ -1,6 +1,7 @@
 #!/bin/sh
 
 DATE=$(date +%Y-%m-%d)
+UPDATED=""
 TITLE=""
 # hexo source directory
 SOURCE_DIR="../source/_posts"
@@ -113,7 +114,7 @@ get_desc () {
     DESC=$(echo "$DESC" | tr -d '\n')
     # replace '\' and '"' and '*' and '~' and '>'
     DESC=$(echo "$DESC" | sed 's/\\/\\\\/g; s/\"/\\\"/g; s/\*//g; s/\~//g; s/>//g; s/:/\":\"/g')
-    #replace "$DESC"
+    # replace "$DESC"
 }
 
 # determine if a description is required
@@ -131,20 +132,27 @@ is_desc () {
 get_title () {
     TITLE=$(sed -n '1,10{/^[#][^#]/p}' "$1")
     TITLE=${TITLE: 2}
+    if [ -z "$TITLE" ]; then
+        TITLE=$(basename "$1")
+    fi
 }
 
 # generate head info
 gen_head_info () {
-    # get article title
+    # Get article title
     get_title "$1"
-    # DESC is not empty
-    if [ -n "$DESC" ]; then
-        # generate head info
-        head_info="---\ndate: ${DATE}\ntitle: ${TITLE}\ndescription: ${DESC}\n---"
+    # Determine head_info based on DESC and UPDATED
+    if [ -z "$UPDATED" ]; then
+        updated_line=""
     else
-        head_info="---\ndate: ${DATE}\ntitle: ${TITLE}\n---"
+        updated_line="updated: ${UPDATED}\n"
     fi
-    # replace '\' and '"'
+    head_info="---\ndate: ${DATE}\n${updated_line}title: ${TITLE}"
+    if [ -n "$DESC" ]; then
+        head_info="${head_info}\ndescription: ${DESC}"
+    fi
+    head_info="${head_info}\n---"
+    # Replace '\' and '"'
     head_info=$(echo "$head_info" | sed 's/\\/\\\\/g' | sed 's/\"/\\\"/g')
 }
 
@@ -173,6 +181,16 @@ peocess_file () {
     if [ ! -d $SOURCE_DIR/$dir ]; then
         print_info "--> create folder $SOURCE_DIR/$dir"
         mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir" $LINENO
+    elif [ -f $SOURCE_DIR/$dir/$filename ]; then
+            DATE=$(sed -n '1,10{/^date:/p}' $SOURCE_DIR/$dir/$filename | sed 's/date: //g')
+            DESC=$(sed -n '1,30{/^description:/p}' $SOURCE_DIR/$dir/$filename | sed 's/description: //g')
+            TITLE=$(sed -n '1,30{/^title:/p}' $SOURCE_DIR/$dir/$filename | sed 's/title: //g')
+            UPDATED=$(date +%Y-%m-%d)
+            gen_head_info "$1"
+            # insert head info & write to file & del the line start with '#'
+            sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
+                    > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+            return
     fi
     get_desc "$1"
     
@@ -276,7 +294,7 @@ specify_file (){
     peocess_file "$1"
 }
 
-# main
+### main ###
 parse_args "$@"
 
 print_info "NOTE_DIR: $NOTE_DIR; SOURCE_DIR: $SOURCE_DIR"
