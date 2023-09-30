@@ -1,8 +1,11 @@
 #!/bin/sh
 
+DEBUG=0
 DATE=$(date +%Y-%m-%d)
 UPDATED=""
 TITLE=""
+TAGS=""
+CATEGORY=""
 # hexo source directory
 SOURCE_DIR="../source/_posts"
 # note directory
@@ -51,7 +54,7 @@ help () {
   echo "  OPTIONS:"
   echo "    -s, --source-dir DIR   Specify the source directory (default: '../source/_posts')"
   echo "    -n, --note-dir DIR     Specify the note directory (default: '../notes')"
-  echo "    -a, --all              Parse all files in the note directory (default: true)"
+  echo "    -a, --all              Parse all files in the note directory (default: true if not specify -f, false if specify -f)"
   echo "    -f, --file FILE        Parse the specified file in the note directory (default: '')"
   echo "    -h, --help             Display this help message and exit"
   echo ""
@@ -83,6 +86,14 @@ parse_args () {
       -f|--file)
         FILE="$2"
         shift 2
+        ;;
+      -d|--delete)
+        del_file "$2"
+        shift
+        ;;
+      --debug)
+        DEBUG=1
+        shift
         ;;
       -h|--help)
         help
@@ -120,7 +131,8 @@ get_desc () {
 # determine if a description is required
 is_desc () {
     lcount=$(sed -n '1,15{/^#/p}' $1 | wc -l)
-    # if the number of lines starting with '#' is greater than 2 in 1-10, it is considered that there is a description
+    # if the number of lines starting with '#' is greater than 2 in 1-10,
+    # it is considered that there is a description
     if [ $lcount -ge 2 ]; then
         return 0
     else
@@ -151,9 +163,32 @@ gen_head_info () {
     if [ -n "$DESC" ]; then
         head_info="${head_info}\ndescription: ${DESC}"
     fi
+    if [ -n "$TAGS" ]; then
+        head_info="${head_info}\ntags:\n"
+        for tag in $TAGS; do
+            head_info="${head_info}- ${tag}\n"
+        done
+    fi
+    if [ -n "$CATEGORY" ]; then
+        head_info="${head_info}\ncategories:\n- [${CATEGORY}]"
+    fi
     head_info="${head_info}\n---"
     # Replace '\' and '"'
     head_info=$(echo "$head_info" | sed 's/\\/\\\\/g' | sed 's/\"/\\\"/g')
+}
+
+declare -A file_tags
+read_tags() {
+        if [ -f $1/tags ]; then
+                print_info "read tags from $1/tags"
+                while IFS= read -r line; do
+                        filename=$(echo $line | awk -F: '{print $1}')
+                        tags=$(echo $line | awk -F: '{print $2}')
+                        file_tags[$filename]=$tags
+                done < $1/tags
+        else
+                print_info "no tags file in $1"
+        fi
 }
 
 # 1. check if the file exists
@@ -175,9 +210,15 @@ peocess_file () {
     fi
     
     # insert '<!-- more -->' before line 6
-    ln=6
+    ln=7
     dir=$(dirname "$1" | xargs basename)
+    CATEGORY=$dir
+    echo "current dir: $SOURCE_DIR/$dir"
     filename=$(basename "$1")
+    echo "current filename: $filename"
+
+    read_tags $NOTE_DIR/$dir
+
     if [ ! -d $SOURCE_DIR/$dir ]; then
         print_info "--> create folder $SOURCE_DIR/$dir"
         mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir" $LINENO
@@ -185,19 +226,23 @@ peocess_file () {
             DATE=$(sed -n '1,10{/^date:/p}' $SOURCE_DIR/$dir/$filename | sed 's/date: //g')
             DESC=$(sed -n '1,30{/^description:/p}' $SOURCE_DIR/$dir/$filename | sed 's/description: //g')
             TITLE=$(sed -n '1,30{/^title:/p}' $SOURCE_DIR/$dir/$filename | sed 's/title: //g')
+            TAGS=$(head -n 30 $SOURCE_DIR/$dir/$filename | awk '/^tags:/ {tags=1; next} /^-[^-]/ && tags {print substr($0, 3); next} {tags=0}')
             UPDATED=$(date +%Y-%m-%d)
+
             gen_head_info "$1"
             # insert head info & write to file & del the line start with '#'
             sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
                     > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
             return
     fi
+
+    TAGS=${file_tags[$filename]}
     get_desc "$1"
     
     # DESC is not empty
     if [ -n "$DESC" ]; then
         gen_head_info "$1"
-        # insert head info & write to file & del the line start with '#'
+        # insert head info and write to file and del the line start with '#'
         sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
             > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
         return
@@ -225,6 +270,7 @@ peocess_file () {
    # fi
     
     gen_head_info "$1"
+
     print_info "oh! "$1" is need a <!-- more -->"
 
     # check if the line is a block
@@ -271,6 +317,14 @@ peocess_file () {
     fi
 }
 
+del_file () {
+    dfile=$SOURCE_DIR/$1
+    if [ -f $dfile ]; then
+        print_info "deleting file $dfile"
+        mv $dfile "$dfile.trash"
+    fi
+}
+
 traverse_folder () {
     for file in "$1"/*; do
         if [ -d "$file" ]; then
@@ -296,6 +350,14 @@ specify_file (){
 
 ### main ###
 parse_args "$@"
+
+if [ $DEBUG -eq 1 ]; then
+        if [ -d 'debug' ]; then
+                rm -rf debug
+                mkdir debug
+        fi
+        SOURCE_DIR=$(pwd)/debug
+fi
 
 print_info "NOTE_DIR: $NOTE_DIR; SOURCE_DIR: $SOURCE_DIR"
 if [ -n "$FILE" ]; then
