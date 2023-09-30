@@ -360,7 +360,7 @@ if [ $DEBUG -eq 1 ]; then
 fi
 
 print_info "NOTE_DIR: $NOTE_DIR; SOURCE_DIR: $SOURCE_DIR"
-if [ -n "$FILE" ]; then
+if [ -n "$FILE" ] && [ -f "$FILE" ]; then
     specify_file "$FILE"
 else
     traverse_folder $NOTE_DIR
