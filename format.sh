@@ -1,6 +1,7 @@
 #!/bin/sh
 
 DEBUG=0
+FORCE=0
 DATE=$(date +%Y-%m-%d)
 UPDATED=""
 TITLE=""
@@ -56,6 +57,7 @@ help () {
   echo "    -n, --note-dir DIR     Specify the note directory (default: '../notes')"
   echo "    -a, --all              Parse all files in the note directory (default: true if not specify -f, false if specify -f)"
   echo "    -f, --file FILE        Parse the specified file in the note directory (default: '')"
+  echo "    --force                Force to parse the specified file (default: false), can reset tags and description and title"
   echo "    -h, --help             Display this help message and exit"
   echo ""
   echo "This script traverses the specified note directory and converts each Markdown file"
@@ -86,6 +88,14 @@ parse_args () {
       -f|--file)
         FILE="$2"
         shift 2
+        # while [[ $# -gt 0 && ! "$1" =~ ^-[^-] ]]; do
+        #   FILE="$FILE $1"
+        #   shift
+        # done
+        ;;
+      --force)
+        FORCE=1
+        shift
         ;;
       -d|--delete)
         del_file "$2"
@@ -182,13 +192,20 @@ read_tags() {
         if [ -f $1/tags ]; then
                 print_info "read tags from $1/tags"
                 while IFS= read -r line; do
-                        filename=$(echo $line | awk -F: '{print $1}')
+                        tags_filename=$(echo $line | awk -F: '{print $1}')
                         tags=$(echo $line | awk -F: '{print $2}')
-                        file_tags[$filename]=$tags
+                        file_tags[$tags_filename]=$tags
                 done < $1/tags
         else
                 print_info "no tags file in $1"
         fi
+}
+
+insert_head_info () {
+        # insert head info and write to file and del the line start with '#'
+        sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
+                > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
+        print_info "--> saved $SOURCE_DIR/$dir/$filename"
 }
 
 # 1. check if the file exists
@@ -213,26 +230,38 @@ peocess_file () {
     ln=7
     dir=$(dirname "$1" | xargs basename)
     CATEGORY=$dir
-    echo "current dir: $SOURCE_DIR/$dir"
+    print_info "current dir: $SOURCE_DIR/$dir"
     filename=$(basename "$1")
-    echo "current filename: $filename"
+    print_info "current filename: $filename"
 
     read_tags $NOTE_DIR/$dir
+    echo "filename: $filename"
 
     if [ ! -d $SOURCE_DIR/$dir ]; then
         print_info "--> create folder $SOURCE_DIR/$dir"
         mkdir -p $SOURCE_DIR/$dir || handle_error "Could not create folder $SOURCE_DIR/$dir" $LINENO
     elif [ -f $SOURCE_DIR/$dir/$filename ]; then
+            if [ $FORCE -eq 1 ]; then
+                    DATE=$(sed -n '1,10{/^date:/p}' $SOURCE_DIR/$dir/$filename | sed 's/date: //g')
+                    TAGS=${file_tags[$filename]}
+                    UPDATED=$(date +%Y-%m-%d)
+                    get_desc "$1"
+                    gen_head_info "$1"
+                    insert_head_info "$1"
+                    return
+            fi
+
             DATE=$(sed -n '1,10{/^date:/p}' $SOURCE_DIR/$dir/$filename | sed 's/date: //g')
             DESC=$(sed -n '1,30{/^description:/p}' $SOURCE_DIR/$dir/$filename | sed 's/description: //g')
             TITLE=$(sed -n '1,30{/^title:/p}' $SOURCE_DIR/$dir/$filename | sed 's/title: //g')
             TAGS=$(head -n 30 $SOURCE_DIR/$dir/$filename | awk '/^tags:/ {tags=1; next} /^-[^-]/ && tags {print substr($0, 3); next} {tags=0}')
+            TAGS+="${file_tags[$filename]}"
+            # Remove duplicates
+            TAGS=$(echo $TAGS | tr ' ' '\n' | sort -u | tr '\n' ' ')
             UPDATED=$(date +%Y-%m-%d)
 
             gen_head_info "$1"
-            # insert head info & write to file & del the line start with '#'
-            sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
-                    > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename" $LINENO
+            insert_head_info "$1"
             return
     fi
 
@@ -242,9 +271,7 @@ peocess_file () {
     # DESC is not empty
     if [ -n "$DESC" ]; then
         gen_head_info "$1"
-        # insert head info and write to file and del the line start with '#'
-        sed "1i $(echo -e "$head_info")" "$1" | sed '/^[#][^#]/d' \
-            > $SOURCE_DIR/$dir/$filename || handle_error "Could not write file $SOURCE_DIR/$dir/$filename"
+        insert_head_info "$1"
         return
     fi
     
@@ -353,7 +380,8 @@ parse_args "$@"
 
 if [ $DEBUG -eq 1 ]; then
         if [ -d 'debug' ]; then
-                rm -rf debug
+                echo "debug folder exists"
+        else
                 mkdir debug
         fi
         SOURCE_DIR=$(pwd)/debug
